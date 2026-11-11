@@ -15,6 +15,15 @@ input, select { padding: 8px; border: 1px solid #d1d5db; border-radius: 8px; }
 pre { background: #111827; color: #e5e7eb; padding: 12px; border-radius: 8px; overflow: auto; white-space: pre-wrap; word-break: break-all; }
 .ip { font-size: 32px; font-weight: 700; }
 .muted { color: #6b7280; }
+.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 10px; margin-top: 12px; }
+.kv { background: #f6f7f9; border-radius: 8px; padding: 10px 12px; }
+.kv b { display: block; font-size: 12px; color: #888; font-weight: 500; margin-bottom: 4px; }
+.kv span { font-size: 14px; word-break: break-all; }
+.badge { display: inline-block; padding: 4px 10px; border-radius: 999px; font-size: 14px; font-weight: 700; }
+.risk-low { background: #dcfce7; color: #15803d; }
+.risk-medium { background: #fef3c7; color: #92400e; }
+.risk-high { background: #fee2e2; color: #b91c1c; }
+.risk-unknown { background: #e5e7eb; color: #4b5563; }
 </style>
 </head>
 <body>
@@ -25,6 +34,11 @@ pre { background: #111827; color: #e5e7eb; padding: 12px; border-radius: 8px; ov
 <h2>你的 IP</h2>
 <div class="ip" id="ip">加载中…</div>
 <button id="refresh-ip">刷新</button>
+</section>
+<section class="card">
+<h2>IP 质量</h2>
+<div id="quality">加载中…</div>
+<p class="muted">风险为三档近似（低 / 中 / 高），不是 ping0 的风控百分比；数据来自 ip-api.com + Cloudflare 边缘。ip-api 免费版限流 45 次/分钟，失败时只显示边缘信息。</p>
 </section>
 <section class="card">
 <h2>HTTP 延迟</h2>
@@ -42,6 +56,9 @@ pre { background: #111827; color: #e5e7eb; padding: 12px; border-radius: 8px; ov
 </section>
 </main>
 <script>
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const yesNo = (v) => v === true ? "是" : v === false ? "否" : "-";
+
 async function loadIp() {
   const el = document.getElementById("ip");
   el.textContent = "加载中…";
@@ -53,7 +70,36 @@ async function loadIp() {
     el.textContent = "获取失败：" + e;
   }
 }
-document.getElementById("refresh-ip").addEventListener("click", loadIp);
+
+async function loadQuality() {
+  const el = document.getElementById("quality");
+  el.textContent = "加载中…";
+  try {
+    const res = await fetch("/api/quality");
+    const d = await res.json();
+    if (d.error) { el.textContent = "获取失败：" + d.error; return; }
+    const q = d.quality || {};
+    const riskClass = q.riskLevel === "high" ? "risk-high" : q.riskLevel === "medium" ? "risk-medium" : q.riskLevel === "low" ? "risk-low" : "risk-unknown";
+    el.innerHTML =
+      '<div><span class="badge ' + riskClass + '">' + esc(q.riskText || "未知") + '</span> ' +
+      '<span style="margin-left:8px">' + esc(q.type || "-") + '</span></div>' +
+      '<div class="grid">' +
+      '<div class="kv"><b>代理 / VPN / Tor</b><span>' + esc(yesNo(q.proxy)) + '</span></div>' +
+      '<div class="kv"><b>数据中心</b><span>' + esc(yesNo(q.hosting)) + '</span></div>' +
+      '<div class="kv"><b>移动网络</b><span>' + esc(yesNo(q.mobile)) + '</span></div>' +
+      '<div class="kv"><b>ASN</b><span>' + esc(d.asn || "-") + '</span></div>' +
+      '<div class="kv"><b>运营商 / 组织</b><span>' + esc(d.asOrganization || d.isp || "-") + '</span></div>' +
+      '<div class="kv"><b>国家 / 城市</b><span>' + esc([d.country, d.city].filter(Boolean).join(" ") || "-") + '</span></div>' +
+      '<div class="kv"><b>时区</b><span>' + esc(d.timezone || "-") + '</span></div>' +
+      '<div class="kv"><b>数据来源</b><span>' + esc(d.source || "-") + (d.cached ? "（缓存）" : "") + '</span></div>' +
+      '</div>' +
+      (q.note ? '<p class="muted">' + esc(q.note) + '</p>' : '');
+  } catch (e) {
+    el.textContent = "获取失败：" + e;
+  }
+}
+
+document.getElementById("refresh-ip").addEventListener("click", () => { loadIp(); loadQuality(); });
 document.getElementById("ping-btn").addEventListener("click", async () => {
   const target = document.getElementById("ping-target").value.trim() || "example.com";
   const out = document.getElementById("ping-result");
@@ -80,6 +126,7 @@ document.getElementById("dns-btn").addEventListener("click", async () => {
   }
 });
 loadIp();
+loadQuality();
 </script>
 </body>
 </html>
