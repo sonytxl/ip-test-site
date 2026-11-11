@@ -5,10 +5,10 @@
 ## 功能
 
 - 显示访问者 IP（`GET /api/ip`，读取 `cf-connecting-ip`）
-- IP 质量（`GET /api/quality`，只查访问者自己的 IP）：Cloudflare 边缘 + ip-api.com 免费版，显示 IP 类型（住宅/移动/数据中心/代理）、代理/VPN/Tor、数据中心、风险三档（低/中/高）。风险是近似档位，不是 ping0 的风控百分比。ip-api 免费版只能走 HTTP、限流 45 次/分钟，由 Worker 在服务端调用并按 IP 缓存 1 小时；失败时降级只显示边缘信息。
+- IP 质量（`GET /api/quality` 查自己，`GET /api/quality?ip=8.8.8.8` 查任意公网 IP）：Cloudflare 边缘 + ip-api.com 免费版，显示 IP 类型（住宅/移动/数据中心/代理）、代理/VPN/Tor、数据中心、风险三档（低/中/高）。风险是近似档位，不是 ping0 的风控百分比。ip-api 免费版只能走 HTTP、限流 45 次/分钟，由 Worker 在服务端调用并按 IP 缓存 1 小时；失败时降级只显示边缘信息。
 - 查任意 IP：首页最上方有搜索框，输入公网 IP 可查该 IP 的质量（`GET /api/quality?ip=8.8.8.8`），内网、回环和保留地址会被拒绝；不填就查自己的 IP。
-- HTTP 延迟测试（`GET /api/ping?target=example.com`，边缘节点发起 3 次 HTTP 请求并计时，不是 ICMP）
-- DNS 查询（`GET /api/dns?name=example.com&type=A`，通过 DNS-over-HTTPS 查询 dns.google）
+- HTTP 延迟测试（`GET /api/ping?target=example.com`，边缘节点发起 3 次 HTTP 请求并计时，不是 ICMP）：首页显示平均延迟、每次结果和最快/最慢，原始 JSON 折叠在“查看原始 JSON”里。
+- DNS 查询（`GET /api/dns?name=example.com&type=A`，通过 DNS-over-HTTPS 查询 dns.google）：首页直接列出每条记录的值、类型和 TTL，原始 JSON 折叠在“查看原始 JSON”里。
 
 ## 本地开发
 
