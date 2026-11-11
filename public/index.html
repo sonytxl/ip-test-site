@@ -11,7 +11,12 @@ h1 { font-size: 28px; }
 .card { background: #fff; border: 1px solid #e5e7eb; border-radius: 12px; padding: 20px; margin: 16px 0; }
 button { padding: 8px 16px; border: none; border-radius: 8px; background: #2563eb; color: #fff; cursor: pointer; }
 button:hover { background: #1d4ed8; }
+button.ghost { background: #eef2ff; color: #2563eb; }
 input, select { padding: 8px; border: 1px solid #d1d5db; border-radius: 8px; }
+.search-row { display: flex; gap: 8px; }
+.search-row input { flex: 1; min-width: 0; padding: 11px 12px; font-size: 15px; }
+.chips { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
+.chip { padding: 6px 10px; border: 1px solid #dbeafe; background: #eff6ff; color: #1d4ed8; border-radius: 999px; font-size: 13px; cursor: pointer; }
 pre { background: #111827; color: #e5e7eb; padding: 12px; border-radius: 8px; overflow: auto; white-space: pre-wrap; word-break: break-all; }
 .ip { font-size: 32px; font-weight: 700; }
 .muted { color: #6b7280; }
@@ -31,12 +36,28 @@ pre { background: #111827; color: #e5e7eb; padding: 12px; border-radius: 8px; ov
 <h1>IP 测试站</h1>
 <p class="muted">无服务器 IP 测试：显示你的 IP、测 HTTP 延迟、查 DNS。</p>
 <section class="card">
+<h2>查任意 IP 的质量</h2>
+<div class="search-row">
+<input id="search-ip" placeholder="输入要查的 IP，例如 8.8.8.8 或 1.1.1.1" autocomplete="off" inputmode="text" />
+<button id="search-btn" type="button">查询</button>
+<button id="search-mine" class="ghost" type="button">查我的 IP</button>
+</div>
+<div class="chips">
+<span class="chip" data-ip="8.8.8.8">8.8.8.8</span>
+<span class="chip" data-ip="1.1.1.1">1.1.1.1</span>
+<span class="chip" data-ip="223.5.5.5">223.5.5.5</span>
+<span class="chip" data-ip="9.9.9.9">9.9.9.9</span>
+</div>
+<p class="muted">只支持公网 IP，内网、回环地址查不了；不填就查你自己的 IP。</p>
+</section>
+<section class="card">
 <h2>你的 IP</h2>
 <div class="ip" id="ip">加载中…</div>
 <button id="refresh-ip">刷新</button>
 </section>
 <section class="card">
 <h2>IP 质量</h2>
+<div id="quality-ip" class="muted"></div>
 <div id="quality">加载中…</div>
 <p class="muted">风险为三档近似（低 / 中 / 高），不是 ping0 的风控百分比；数据来自 ip-api.com + Cloudflare 边缘。ip-api 免费版限流 45 次/分钟，失败时只显示边缘信息。</p>
 </section>
@@ -65,19 +86,34 @@ async function loadIp() {
   try {
     const res = await fetch("/api/ip");
     const data = await res.json();
+    window._myIp = data.ip || "";
     el.textContent = data.ip || "未获取到 IP";
   } catch (e) {
     el.textContent = "获取失败：" + e;
   }
 }
 
-async function loadQuality() {
+function searchQuality(ip) {
+  const v = (ip || document.getElementById("search-ip").value || "").trim();
+  if (!v) { loadQuality(); return; }
+  loadQuality(v);
+}
+
+document.getElementById("search-btn").addEventListener("click", () => searchQuality());
+document.getElementById("search-ip").addEventListener("keydown", (e) => { if (e.key === "Enter") searchQuality(); });
+document.getElementById("search-mine").addEventListener("click", () => { document.getElementById("search-ip").value = ""; loadQuality(); });
+document.querySelectorAll(".chip").forEach((c) => c.addEventListener("click", () => { document.getElementById("search-ip").value = c.dataset.ip; searchQuality(c.dataset.ip); }));
+
+async function loadQuality(ip) {
   const el = document.getElementById("quality");
+  const label = document.getElementById("quality-ip");
   el.textContent = "加载中…";
   try {
-    const res = await fetch("/api/quality");
+    const url = ip ? "/api/quality?ip=" + encodeURIComponent(ip) : "/api/quality";
+    const res = await fetch(url);
     const d = await res.json();
-    if (d.error) { el.textContent = "获取失败：" + d.error; return; }
+    if (!res.ok || d.error) { el.textContent = "查询失败：" + (d.error || ("HTTP " + res.status)); return; }
+    label.textContent = "正在查看：" + d.ip + (window._myIp && d.ip !== window._myIp ? "（你的 IP 是 " + window._myIp + "）" : "（你的 IP）");
     const q = d.quality || {};
     const riskClass = q.riskLevel === "high" ? "risk-high" : q.riskLevel === "medium" ? "risk-medium" : q.riskLevel === "low" ? "risk-low" : "risk-unknown";
     el.innerHTML =
