@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>IP 测试站</title>
+<style>
+body { font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; margin: 0; background: #f6f7f9; color: #1a1a1a; }
+main { max-width: 720px; margin: 40px auto; padding: 0 16px; }
+h1 { font-size: 28px; }
+.card { background: #fff; border: 1px solid #e5e7eb; border-radius: 12px; padding: 20px; margin: 16px 0; }
+button { padding: 8px 16px; border: none; border-radius: 8px; background: #2563eb; color: #fff; cursor: pointer; }
+button:hover { background: #1d4ed8; }
+input, select { padding: 8px; border: 1px solid #d1d5db; border-radius: 8px; }
+pre { background: #111827; color: #e5e7eb; padding: 12px; border-radius: 8px; overflow: auto; white-space: pre-wrap; word-break: break-all; }
+.ip { font-size: 32px; font-weight: 700; }
+.muted { color: #6b7280; }
+</style>
+</head>
+<body>
+<main>
+<h1>IP 测试站</h1>
+<p class="muted">无服务器 IP 测试：显示你的 IP、测 HTTP 延迟、查 DNS。</p>
+<section class="card">
+<h2>你的 IP</h2>
+<div class="ip" id="ip">加载中…</div>
+<button id="refresh-ip">刷新</button>
+</section>
+<section class="card">
+<h2>HTTP 延迟</h2>
+<p>从边缘节点向目标发起 3 次 HTTP 请求并计时（不是 ICMP ping）。</p>
+<input id="ping-target" value="example.com" />
+<button id="ping-btn">开始测试</button>
+<pre id="ping-result">点击“开始测试”。</pre>
+</section>
+<section class="card">
+<h2>DNS 查询</h2>
+<input id="dns-name" value="example.com" />
+<select id="dns-type"><option>A</option><option>AAAA</option><option>CNAME</option><option>MX</option><option>TXT</option><option>NS</option></select>
+<button id="dns-btn">查询</button>
+<pre id="dns-result">点击“查询”。</pre>
+</section>
+</main>
+<script>
+async function loadIp() {
+  const el = document.getElementById("ip");
+  el.textContent = "加载中…";
+  try {
+    const res = await fetch("/api/ip");
+    const data = await res.json();
+    el.textContent = data.ip || "未获取到 IP";
+  } catch (e) {
+    el.textContent = "获取失败：" + e;
+  }
+}
+document.getElementById("refresh-ip").addEventListener("click", loadIp);
+document.getElementById("ping-btn").addEventListener("click", async () => {
+  const target = document.getElementById("ping-target").value.trim() || "example.com";
+  const out = document.getElementById("ping-result");
+  out.textContent = "测试中…";
+  try {
+    const res = await fetch("/api/ping?target=" + encodeURIComponent(target));
+    const data = await res.json();
+    out.textContent = JSON.stringify(data, null, 2);
+  } catch (e) {
+    out.textContent = "请求失败：" + e;
+  }
+});
+document.getElementById("dns-btn").addEventListener("click", async () => {
+  const name = document.getElementById("dns-name").value.trim() || "example.com";
+  const type = document.getElementById("dns-type").value;
+  const out = document.getElementById("dns-result");
+  out.textContent = "查询中…";
+  try {
+    const res = await fetch("/api/dns?name=" + encodeURIComponent(name) + "&type=" + encodeURIComponent(type));
+    const data = await res.json();
+    out.textContent = JSON.stringify(data, null, 2);
+  } catch (e) {
+    out.textContent = "请求失败：" + e;
+  }
+});
+loadIp();
+</script>
+</body>
+</html>
