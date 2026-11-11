@@ -29,6 +29,20 @@ pre { background: #111827; color: #e5e7eb; padding: 12px; border-radius: 8px; ov
 .risk-medium { background: #fef3c7; color: #92400e; }
 .risk-high { background: #fee2e2; color: #b91c1c; }
 .risk-unknown { background: #e5e7eb; color: #4b5563; }
+.result { margin-top: 12px; }
+.big { font-size: 28px; font-weight: 700; }
+.big small { font-size: 14px; font-weight: 400; color: #6b7280; }
+.row { display: flex; justify-content: space-between; gap: 8px; padding: 8px 0; border-bottom: 1px solid #f3f4f6; font-size: 14px; }
+.row:last-child { border-bottom: none; }
+.row .ok { color: #15803d; font-weight: 700; }
+.row .fail { color: #b91c1c; font-weight: 700; }
+.record { padding: 10px 0; border-bottom: 1px solid #f3f4f6; }
+.record:last-child { border-bottom: none; }
+.record .data { font-size: 16px; font-weight: 700; word-break: break-all; }
+.record .meta { font-size: 13px; color: #6b7280; margin-top: 2px; }
+details { margin-top: 12px; }
+details summary { cursor: pointer; color: #2563eb; font-size: 13px; }
+details pre { margin-top: 8px; }
 </style>
 </head>
 <body>
@@ -66,14 +80,14 @@ pre { background: #111827; color: #e5e7eb; padding: 12px; border-radius: 8px; ov
 <p>从边缘节点向目标发起 3 次 HTTP 请求并计时（不是 ICMP ping）。</p>
 <input id="ping-target" value="example.com" />
 <button id="ping-btn">开始测试</button>
-<pre id="ping-result">点击“开始测试”。</pre>
+<div class="result" id="ping-result">点击“开始测试”。</div>
 </section>
 <section class="card">
 <h2>DNS 查询</h2>
 <input id="dns-name" value="example.com" />
 <select id="dns-type"><option>A</option><option>AAAA</option><option>CNAME</option><option>MX</option><option>TXT</option><option>NS</option></select>
 <button id="dns-btn">查询</button>
-<pre id="dns-result">点击“查询”。</pre>
+<div class="result" id="dns-result">点击“查询”。</div>
 </section>
 </main>
 <script>
@@ -136,6 +150,43 @@ async function loadQuality(ip) {
 }
 
 document.getElementById("refresh-ip").addEventListener("click", () => { loadIp(); loadQuality(); });
+function rawDetails(data) {
+  return '<details><summary>查看原始 JSON</summary><pre>' + esc(JSON.stringify(data, null, 2)) + '</pre></details>';
+}
+
+function renderPing(data, out) {
+  if (data.error) { out.innerHTML = '<p>测试失败：' + esc(data.error) + '</p>' + rawDetails(data); return; }
+  const results = data.results || [];
+  const ms = results.map((r) => r.ms).filter((x) => typeof x === "number");
+  const min = ms.length ? Math.min.apply(null, ms) : "-";
+  const max = ms.length ? Math.max.apply(null, ms) : "-";
+  const avg = data.avgMs ?? (ms.length ? Math.round(ms.reduce((a, b) => a + b, 0) / ms.length) : "-");
+  let html = '<div class="big">' + esc(avg) + ' <small>ms 平均</small></div>' +
+    '<p class="muted">目标 ' + esc(data.target || "") + '，共 ' + esc(data.count || results.length) + ' 次 · 最快 ' + esc(min) + ' ms · 最慢 ' + esc(max) + ' ms</p>';
+  results.forEach((r) => {
+    html += '<div class="row"><span>第 ' + esc(r.attempt) + ' 次</span><span>' + esc(r.ms) + ' ms</span>' +
+      '<span class="' + (r.ok ? "ok" : "fail") + '">' + (r.ok ? "成功" : "失败") + (r.status ? ' · HTTP ' + esc(r.status) : "") + '</span></div>';
+  });
+  out.innerHTML = html + rawDetails(data);
+}
+
+const dnsTypeName = { 1: "A", 2: "NS", 5: "CNAME", 6: "SOA", 15: "MX", 16: "TXT", 28: "AAAA" };
+const dnsStatusText = { 0: "解析成功", 1: "格式错误", 2: "服务器失败", 3: "域名不存在", 4: "不支持的查询", 5: "被拒绝" };
+function renderDns(data, out) {
+  if (data.error) { out.innerHTML = '<p>查询失败：' + esc(data.error) + '</p>' + rawDetails(data); return; }
+  const status = data.status;
+  let html = '<p><b>' + esc(data.name || "") + '</b> · ' + esc(data.type || "") + ' 记录 · ' + esc(dnsStatusText[status] || ("状态码 " + status)) + '</p>';
+  const answer = data.answer || [];
+  if (!answer.length) {
+    html += '<p class="muted">没有查到记录。</p>';
+  }
+  answer.forEach((a) => {
+    html += '<div class="record"><div class="data">' + esc(a.data) + '</div>' +
+      '<div class="meta">' + esc(dnsTypeName[a.type] || ("类型 " + a.type)) + ' · TTL ' + esc(a.TTL) + ' 秒 · ' + esc(a.name || "") + '</div></div>';
+  });
+  out.innerHTML = html + rawDetails(data);
+}
+
 document.getElementById("ping-btn").addEventListener("click", async () => {
   const target = document.getElementById("ping-target").value.trim() || "example.com";
   const out = document.getElementById("ping-result");
@@ -143,7 +194,7 @@ document.getElementById("ping-btn").addEventListener("click", async () => {
   try {
     const res = await fetch("/api/ping?target=" + encodeURIComponent(target));
     const data = await res.json();
-    out.textContent = JSON.stringify(data, null, 2);
+    renderPing(data, out);
   } catch (e) {
     out.textContent = "请求失败：" + e;
   }
@@ -156,7 +207,7 @@ document.getElementById("dns-btn").addEventListener("click", async () => {
   try {
     const res = await fetch("/api/dns?name=" + encodeURIComponent(name) + "&type=" + encodeURIComponent(type));
     const data = await res.json();
-    out.textContent = JSON.stringify(data, null, 2);
+    renderDns(data, out);
   } catch (e) {
     out.textContent = "请求失败：" + e;
   }
